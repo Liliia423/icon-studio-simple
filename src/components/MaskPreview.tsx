@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureResvg, svgToPng } from "../lib/generate";
+import styles from "./MaskPreview.module.css";
 
 type MaskKind = "none" | "circle" | "squircle" | "rounded" | "teardrop";
 
@@ -191,7 +192,6 @@ export default function MaskPreview({
         ctx.drawImage(img, 0, 0, dim, dim);
         ctx.restore();
 
-        // тінт поза маскою — “can be masked away”
         if (mask !== "none") {
           ctx.save();
           ctx.fillStyle = outsideMaskTint;
@@ -297,14 +297,7 @@ export default function MaskPreview({
   ]);
 
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
+    <div className={styles.maskpreview}>
       <canvas
         ref={canvasRef}
         width={dim}
@@ -316,26 +309,8 @@ export default function MaskPreview({
           boxShadow: "0 6px 18px rgba(0,0,0,.08)",
         }}
       />
-      {error && (
-        <div
-          style={{
-            color: "#b00020",
-            fontSize: 12,
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco",
-          }}
-        >
-          {error}
-        </div>
-      )}
-      <div
-        style={{
-          color: "#666",
-          fontSize: 12,
-          userSelect: "none",
-          textAlign: "center",
-          lineHeight: 1.2,
-        }}
-      >
+      {error && <div className={styles.maskerror}>{error}</div>}
+      <div className={styles.masksize}>
         Mask: <code>{mask}</code> • {dim}×{dim}px • bleed{" "}
         {Math.round(bleedPct * 100)}% • safe {Math.round(safePct * 100)}% • key{" "}
         {Math.round(keyPct * 100)}%

@@ -4,6 +4,7 @@ import { buildZip, downloadBlob } from "./lib/generate";
 import { importIconFile } from "./lib/fileImport";
 import styles from "./App.module.css";
 
+// Безпечне отримання тексту помилки
 const errMsg = (e: unknown): string => {
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
@@ -14,12 +15,14 @@ const errMsg = (e: unknown): string => {
   }
 };
 
+// Маски
 const MASKS = ["none", "circle", "squircle", "rounded", "teardrop"] as const;
 export type MaskKind = (typeof MASKS)[number];
 function isMaskKind(v: string): v is MaskKind {
   return (MASKS as readonly string[]).includes(v);
 }
 
+// Санітизація SVG (синхронізовано з fileImport.ts)
 function sanitizeSvg(svg: string): string {
   let out = svg;
   out = out.replace(/<!--[\s\S]*?-->/g, "");
@@ -39,9 +42,16 @@ export default function App() {
   const [mask, setMask] = useState<MaskKind>("circle");
   const [size, setSize] = useState<number>(512);
 
-  // Bounds UI
+  // Bounds / debug
   const [showBounds, setShowBounds] = useState(false);
   const [boundsMode, setBoundsMode] = useState<"pre" | "post">("post");
+
+  // Незалежне керування маскою та зображенням
+  const [maskScale, setMaskScale] = useState(1); // 50..100% у UI
+  const [imageMode, setImageMode] = useState<"contain" | "cover" | "manual">(
+    "contain"
+  );
+  const [imageScale, setImageScale] = useState(1);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -50,7 +60,7 @@ export default function App() {
       const f = e.target.files?.[0];
       if (!f) return;
 
-      const MAX_BYTES = 10 * 1024 * 1024;
+      const MAX_BYTES = 10 * 1024 * 1024; // 10MB
       if (f.size > MAX_BYTES) {
         alert("Файл завеликий. Обери файл до 10 МБ.");
         e.target.value = "";
@@ -58,6 +68,7 @@ export default function App() {
       }
 
       try {
+        // paddingPct = 0 → не стискаємо штучно
         const imported = await importIconFile(f, size, 0);
         setSvg(sanitizeSvg(imported.svgText));
       } catch (err: unknown) {
@@ -136,6 +147,7 @@ export default function App() {
           </select>
         </div>
 
+        {/* SIZE */}
         <div>
           <label className={styles.controllabel} htmlFor="size-input">
             Size
@@ -157,7 +169,7 @@ export default function App() {
           />
         </div>
 
-        {/* Bounds controls */}
+        {/* DEBUG BOUNDS */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <label className={styles.controllabel}>
             <input
@@ -181,6 +193,59 @@ export default function App() {
             <option value="pre">pre (before mask)</option>
           </select>
         </div>
+
+        {/* MASK SCALE */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label className={styles.controllabel} htmlFor="mask-scale">
+            Mask %
+          </label>
+          <input
+            id="mask-scale"
+            type="range"
+            min={50}
+            max={100}
+            step={1}
+            value={Math.round(maskScale * 100)}
+            onChange={(e) => setMaskScale(Number(e.target.value) / 100)}
+          />
+          <span>{Math.round(maskScale * 100)}%</span>
+        </div>
+
+        {/* IMAGE FIT */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label className={styles.controllabel} htmlFor="img-mode">
+            Image fit
+          </label>
+          <select
+            id="img-mode"
+            value={imageMode}
+            onChange={(e) =>
+              setImageMode(e.target.value as "contain" | "cover" | "manual")
+            }
+          >
+            <option value="contain">contain (за замовч.)</option>
+            <option value="cover">cover (закриває маску повністю)</option>
+            <option value="manual">manual</option>
+          </select>
+
+          {imageMode === "manual" && (
+            <>
+              <label className={styles.controllabel} htmlFor="img-scale">
+                Image %
+              </label>
+              <input
+                id="img-scale"
+                type="range"
+                min={50}
+                max={200}
+                step={1}
+                value={Math.round(imageScale * 100)}
+                onChange={(e) => setImageScale(Number(e.target.value) / 100)}
+              />
+              <span>{Math.round(imageScale * 100)}%</span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ========= PREVIEW ========= */}
@@ -191,6 +256,9 @@ export default function App() {
           mask={mask}
           showBounds={showBounds}
           boundsMode={boundsMode}
+          maskScale={maskScale}
+          imageMode={imageMode}
+          imageScale={imageScale}
         />
       </div>
 

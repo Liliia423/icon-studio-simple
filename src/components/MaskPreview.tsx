@@ -2,29 +2,47 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureResvg, svgToPng } from "../lib/generate";
 import styles from "./MaskPreview.module.css";
 
+/** Типи */
 type MaskKind = "none" | "circle" | "squircle" | "rounded" | "teardrop";
 type BoundsMode = "pre" | "post";
+type ImageMode = "contain" | "cover" | "manual";
 
 export interface MaskPreviewProps {
   svgText: string;
+  /** Розмір полотна (квадрат), px */
   size?: number;
+  /** Тип маски */
   mask?: MaskKind;
+  /** Показувати гіди 70%/80% + bleed */
   showGuides?: boolean;
-  bleedPct?: number;
-  safePct?: number;
-  keyPct?: number;
+  /** Частка зовнішнього bleed (може бути обрізано системою) */
+  bleedPct?: number; // 0.10 → 10%
+  /** Безпечна зона — повна іконка має вміститись сюди */
+  safePct?: number; // 0.80 → 80%
+  /** Ключова зона — ядро композиції */
+  keyPct?: number; // 0.70 → 70%
+  /** Колір тінту поза маскою (імітація “can be masked away”) */
   outsideMaskTint?: string;
+  /** Кольори шахматки */
   checkerColorA?: string;
   checkerColorB?: string;
 
   /** Показувати рамки реальних меж зображення */
   showBounds?: boolean;
-  /** Де міряти межі: до маски (pre) чи після (post) */
+  /** Де міряти межі: до маски (pre) / після (post) */
   boundsMode?: BoundsMode;
+
+  /** Масштаб маски відносно розміру canvas (0..1). 1 = по краю */
+  maskScale?: number;
+
+  /** Як вписувати картинку у canvas */
+  imageMode?: ImageMode; // "contain" | "cover" | "manual"
+  /** Масштаб картинки для режиму "manual" (1 = 100%) */
+  imageScale?: number;
 }
 
 /* =========================
-   Утиліти малювання
+   Утиліти
    ========================= */
 
 function drawSuperellipsePath(
@@ -97,13 +115,12 @@ async function bytesToBitmap(bytes: Uint8Array): Promise<ImageBitmap> {
   return await createImageBitmap(blob);
 }
 
-/** Отримати межі непрозорих пікселів із canvas у логічних координатах dim×dim */
+/** Межі непрозорих пікселів у логічному розмірі dim×dim */
 function getAlphaBoundsFromCanvas(srcCanvas: HTMLCanvasElement, dim: number) {
   const tmp = document.createElement("canvas");
   tmp.width = dim;
   tmp.height = dim;
   const tctx = tmp.getContext("2d")!;
-  // нормалізуємо до логічного розміру
   tctx.drawImage(srcCanvas, 0, 0, dim, dim);
 
   const { data, width, height } = tctx.getImageData(0, 0, dim, dim);
@@ -146,6 +163,9 @@ export default function MaskPreview({
   checkerColorB = "#efefef",
   showBounds = false,
   boundsMode = "post",
+  maskScale = 1,
+  imageMode = "contain",
+  imageScale = 1,
 }: MaskPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +190,7 @@ export default function MaskPreview({
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+      // фон
       drawChecker(ctx, dim, 16, checkerColorA, checkerColorB);
 
       if (!svgText.trim()) return;
@@ -192,7 +213,7 @@ export default function MaskPreview({
           return;
         }
 
-        // === A) Обчислюємо PRE-границі (до маски), якщо потрібно
+        // межі ДО маски (pre) — якщо потрібно
         let preBounds: { x: number; y: number; w: number; h: number } | null =
           null;
         if (showBounds && boundsMode === "pre") {
@@ -204,10 +225,11 @@ export default function MaskPreview({
           preBounds = getAlphaBoundsFromCanvas(tmp, dim);
         }
 
-        // === B) Малюємо маску + зображення
+        // маска
         const cx = dim / 2;
         const cy = dim / 2;
-        const radius = dim / 2;
+        const fullRadius = dim / 2;
+        const radius = fullRadius * Math.max(0, Math.min(1, maskScale));
 
         ctx.save();
         if (mask !== "none") {
@@ -245,7 +267,30 @@ export default function MaskPreview({
           }
         }
 
-        ctx.drawImage(img, 0, 0, dim, dim);
+        // як малювати картинку (незалежно від маски)
+        let dx = 0,
+          dy = 0,
+          dw = dim,
+          dh = dim;
+
+        if (imageMode === "contain") {
+          // resvg уже дав квадрат dim×dim — залишаємо 1:1
+          dw = dh = dim;
+          dx = dy = 0;
+        } else if (imageMode === "cover") {
+          // трохи збільшуємо, щоб точно покрити круглу/сквіркульну маску
+          const k = Math.SQRT2; // ~1.414 — гарантовано покриває коло всередині квадрата
+          dw = dh = dim * k;
+          dx = (dim - dw) / 2;
+          dy = (dim - dh) / 2;
+        } else if (imageMode === "manual") {
+          const k = Math.max(0.1, imageScale);
+          dw = dh = dim * k;
+          dx = (dim - dw) / 2;
+          dy = (dim - dh) / 2;
+        }
+
+        ctx.drawImage(img, dx, dy, dw, dh);
         img.close?.();
         ctx.restore();
 
@@ -292,9 +337,12 @@ export default function MaskPreview({
             ctx.lineWidth = width;
             ctx.setLineDash(dash);
           };
+
+          // рамка
           line("#888", 1);
           ctx.strokeRect(0.5, 0.5, dim - 1, dim - 1);
 
+          // bleed
           const bleedInset = dim * bleedPct;
           const bleedSize = dim - bleedInset * 2;
           line("#2e7d32", 2, [6, 6]);
@@ -305,16 +353,19 @@ export default function MaskPreview({
             bleedSize - 1
           );
 
+          // safe 80%
           const safe = dim * safePct;
           const safeXY = (dim - safe) / 2;
           line("#1565c0", 2, [10, 6]);
           ctx.strokeRect(0.5 + safeXY, 0.5 + safeXY, safe - 1, safe - 1);
 
+          // key 70%
           const key = dim * keyPct;
           const keyXY = (dim - key) / 2;
           line("#ef6c00", 2, [4, 6]);
           ctx.strokeRect(0.5 + keyXY, 0.5 + keyXY, key - 1, key - 1);
 
+          // центр
           line("#999", 1, [4, 4]);
           ctx.beginPath();
           ctx.moveTo(dim / 2, 0);
@@ -324,9 +375,9 @@ export default function MaskPreview({
           ctx.stroke();
         }
 
-        // === C) Рамки (bounds)
+        // рамки меж (bounds)
         if (showBounds) {
-          // 🔴 рамка по краю полотна (область вписування)
+          // 🔴 область вписування (весь квадрат превʼю)
           ctx.save();
           ctx.setLineDash([]);
           ctx.lineWidth = 2;
@@ -342,10 +393,22 @@ export default function MaskPreview({
 
           if (b) {
             ctx.save();
-            ctx.setLineDash([6, 4]);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = "#1e88e5";
+            ctx.setLineDash([8, 4]);
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = "#8e24aa"; // фіолетова рамка bounds
             ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+
+            // маленький ярличок у кутку, щоб знати pre/post
+            ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI";
+            ctx.fillStyle = "rgba(0,0,0,0.7)";
+            const label = boundsMode === "pre" ? "bounds: pre" : "bounds: post";
+            const pad = 6;
+            const tw = ctx.measureText(label).width;
+            const th = 14;
+            ctx.fillStyle = "rgba(255,255,255,0.7)";
+            ctx.fillRect(b.x + 1, b.y - th - 2, tw + pad * 2, th + 2);
+            ctx.fillStyle = "#5e35b1";
+            ctx.fillText(label, b.x + pad + 1, b.y - 6);
             ctx.restore();
           }
         }
@@ -371,6 +434,9 @@ export default function MaskPreview({
     checkerColorB,
     showBounds,
     boundsMode,
+    maskScale,
+    imageMode,
+    imageScale,
   ]);
 
   return (

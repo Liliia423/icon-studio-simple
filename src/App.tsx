@@ -1,275 +1,156 @@
 import { useCallback, useRef, useState } from "react";
-import MaskPreview from "./components/MaskPreview";
-import { buildZip, downloadBlob } from "./lib/generate";
-import { importIconFile } from "./lib/fileImport";
-import styles from "./App.module.css";
+import BoundsPreview from "./components/BoundsPreview";
 
-// Безпечне отримання тексту помилки
-const errMsg = (e: unknown): string => {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "string") return e;
-  try {
-    return JSON.stringify(e);
-  } catch {
-    return String(e);
-  }
-};
-
-// Маски
-const MASKS = ["none", "circle", "squircle", "rounded", "teardrop"] as const;
-export type MaskKind = (typeof MASKS)[number];
-function isMaskKind(v: string): v is MaskKind {
-  return (MASKS as readonly string[]).includes(v);
-}
-
-// Санітизація SVG (синхронізовано з fileImport.ts)
-function sanitizeSvg(svg: string): string {
-  let out = svg;
-  out = out.replace(/<!--[\s\S]*?-->/g, "");
-  out = out.replace(/<script[\s\S]*?<\/script>/gi, "");
-  out = out.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "");
-  out = out.replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, "");
-  out = out.replace(
-    /\s(href|xlink:href)\s*=\s*(['"])\s*https?:.*?\2/gi,
-    ' $1=""'
-  );
-  out = out.replace(/url\(\s*['"]?https?:.*?\)/gi, "none");
-  return out.trim();
+async function fileToBitmap(file: File): Promise<ImageBitmap> {
+  const blob = file.slice(0, file.size, file.type || "image/png");
+  return await createImageBitmap(blob);
 }
 
 export default function App() {
-  const [svgText, setSvg] = useState<string>("<svg></svg>");
-  const [mask, setMask] = useState<MaskKind>("circle");
-  const [size, setSize] = useState<number>(512);
+  const [image, setImage] = useState<ImageBitmap | null>(null);
+  const [alphaThreshold, setAlphaThreshold] = useState<number>(1);
 
-  // Bounds / debug
-  const [showBounds, setShowBounds] = useState(false);
-  const [boundsMode, setBoundsMode] = useState<"pre" | "post">("post");
+  const [showGuides, setShowGuides] = useState(true);
+  const [showCanvasFrame, setShowCanvasFrame] = useState(true);
+  const [showImageBounds, setShowImageBounds] = useState(true);
 
-  // Незалежне керування маскою та зображенням
-  const [maskScale, setMaskScale] = useState(1); // 50..100% у UI
-  const [imageMode, setImageMode] = useState<"contain" | "cover" | "manual">(
-    "contain"
-  );
-  const [imageScale, setImageScale] = useState(1);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const pickFile = () => fileRef.current?.click();
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const onChooseFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const f = e.target.files?.[0];
-      if (!f) return;
-
-      const MAX_BYTES = 10 * 1024 * 1024; // 10MB
-      if (f.size > MAX_BYTES) {
-        alert("Файл завеликий. Обери файл до 10 МБ.");
-        e.target.value = "";
-        return;
-      }
-
-      try {
-        // paddingPct = 0 → не стискаємо штучно
-        const imported = await importIconFile(f, size, 0);
-        setSvg(sanitizeSvg(imported.svgText));
-      } catch (err: unknown) {
-        alert("Помилка імпорту: " + errMsg(err));
-      } finally {
-        e.target.value = "";
-      }
-    },
-    [size]
-  );
-
-  const onGenerate = useCallback(async () => {
-    try {
-      const cleaned = sanitizeSvg(svgText);
-      const blob = await buildZip(cleaned, "Icon Studio");
-      downloadBlob(blob, "icons.zip");
-    } catch (e) {
-      alert("Помилка генерації: " + errMsg(e));
+  const onFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.type !== "image/png" && !/\.png$/i.test(f.name)) {
+      alert("Будь ласка, обери PNG-файл.");
+      e.target.value = "";
+      return;
     }
-  }, [svgText]);
+    try {
+      const bmp = await fileToBitmap(f);
+      setImage((old) => {
+        old?.close?.();
+        return bmp;
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Не вдалося прочитати PNG.");
+    } finally {
+      e.target.value = "";
+    }
+  }, []);
+
+  const clearImage = () => {
+    image?.close?.();
+    setImage(null);
+  };
 
   return (
-    <div className={styles.page}>
-      <h2>Icon Studio</h2>
+    <div style={{ padding: 24, maxWidth: 980 }}>
+      <h1 style={{ margin: 0 }}>Icon Studio — Alpha Bounds Only</h1>
 
-      {/* ========= SVG TEXT AREA ========= */}
-      <label className={styles.svglable} htmlFor="svg-input">
-        SVG
-      </label>
-      <textarea
-        id="svg-input"
-        className={styles.textareafield}
-        value={svgText}
-        onChange={(e) => setSvg(sanitizeSvg(e.target.value))}
-        rows={8}
-        spellCheck={false}
-      />
-
-      {/* ========= FILE UPLOAD ========= */}
-      <div>
-        <button
-          className={styles.uploadbutton}
-          onClick={() => fileInputRef.current?.click()}
-          type="button"
-        >
-          Upload SVG/PNG/JPG/WEBP/ICO
-        </button>
-        <input
-          className={styles.inputfield}
-          ref={fileInputRef}
-          type="file"
-          accept=".svg,.png,.jpg,.jpeg,.webp,.ico"
-          onChange={onChooseFile}
-        />
-      </div>
-
-      {/* ========= CONTROL PANEL ========= */}
-      <div className={styles.controlpanel}>
-        <div>
-          <label className={styles.controllabel} htmlFor="mask-select">
-            Mask
-          </label>
-          <select
-            id="mask-select"
-            value={mask}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (isMaskKind(v)) setMask(v);
-            }}
-          >
-            {MASKS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* SIZE */}
-        <div>
-          <label className={styles.controllabel} htmlFor="size-input">
-            Size
-          </label>
-          <input
-            id="size-input"
-            type="number"
-            min={64}
-            max={1024}
-            step={16}
-            value={size}
-            onChange={(e) => {
-              const n = Number.parseInt(e.target.value || "512", 10);
-              const clamped = Number.isFinite(n)
-                ? Math.min(1024, Math.max(64, n))
-                : 512;
-              setSize(clamped);
-            }}
-          />
-        </div>
-
-        {/* DEBUG BOUNDS */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <label className={styles.controllabel}>
-            <input
-              type="checkbox"
-              checked={showBounds}
-              onChange={(e) => setShowBounds(e.target.checked)}
-            />{" "}
-            Show real image bounds
-          </label>
-
-          <label className={styles.controllabel} htmlFor="bounds-mode">
-            Bounds:
-          </label>
-          <select
-            id="bounds-mode"
-            value={boundsMode}
-            onChange={(e) => setBoundsMode(e.target.value as "pre" | "post")}
-            disabled={!showBounds}
-          >
-            <option value="post">post (after mask)</option>
-            <option value="pre">pre (before mask)</option>
-          </select>
-        </div>
-
-        {/* MASK SCALE */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <label className={styles.controllabel} htmlFor="mask-scale">
-            Mask %
-          </label>
-          <input
-            id="mask-scale"
-            type="range"
-            min={50}
-            max={100}
-            step={1}
-            value={Math.round(maskScale * 100)}
-            onChange={(e) => setMaskScale(Number(e.target.value) / 100)}
-          />
-          <span>{Math.round(maskScale * 100)}%</span>
-        </div>
-
-        {/* IMAGE FIT */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <label className={styles.controllabel} htmlFor="img-mode">
-            Image fit
-          </label>
-          <select
-            id="img-mode"
-            value={imageMode}
-            onChange={(e) =>
-              setImageMode(e.target.value as "contain" | "cover" | "manual")
-            }
-          >
-            <option value="contain">contain (за замовч.)</option>
-            <option value="cover">cover (закриває маску повністю)</option>
-            <option value="manual">manual</option>
-          </select>
-
-          {imageMode === "manual" && (
-            <>
-              <label className={styles.controllabel} htmlFor="img-scale">
-                Image %
-              </label>
-              <input
-                id="img-scale"
-                type="range"
-                min={50}
-                max={200}
-                step={1}
-                value={Math.round(imageScale * 100)}
-                onChange={(e) => setImageScale(Number(e.target.value) / 100)}
-              />
-              <span>{Math.round(imageScale * 100)}%</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ========= PREVIEW ========= */}
-      <div className={styles.preview}>
-        <MaskPreview
-          svgText={svgText}
-          size={size}
-          mask={mask}
-          showBounds={showBounds}
-          boundsMode={boundsMode}
-          maskScale={maskScale}
-          imageMode={imageMode}
-          imageScale={imageScale}
-        />
-      </div>
-
-      {/* ========= GENERATE BUTTON ========= */}
-      <button
-        className={styles.generatebutton}
-        onClick={onGenerate}
-        type="button"
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          margin: "16px 0 24px",
+        }}
       >
-        Generate ZIP
-      </button>
+        <button
+          onClick={pickFile}
+          style={{
+            padding: "10px 16px",
+            borderRadius: 10,
+            border: "1px solid #222",
+            background: "#1f1f1f",
+            color: "#fff",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Upload PNG (512×512)
+        </button>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".png,image/png"
+          onChange={onFile}
+          style={{ display: "none" }}
+        />
+
+        <button
+          onClick={clearImage}
+          disabled={!image}
+          style={{
+            padding: "10px 16px",
+            borderRadius: 10,
+            border: "1px solid #bbb",
+            background: "#f3f3f3",
+            color: "#222",
+            cursor: image ? "pointer" : "not-allowed",
+          }}
+        >
+          Clear
+        </button>
+
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={showGuides}
+            onChange={(e) => setShowGuides(e.target.checked)}
+          />
+          Guides
+        </label>
+
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={showCanvasFrame}
+            onChange={(e) => setShowCanvasFrame(e.target.checked)}
+          />
+          Canvas frame
+        </label>
+
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={showImageBounds}
+            onChange={(e) => setShowImageBounds(e.target.checked)}
+          />
+          PNG bounds
+        </label>
+
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            marginLeft: "auto",
+          }}
+        >
+          α-threshold:
+          <input
+            type="range"
+            min={0}
+            max={255}
+            value={alphaThreshold}
+            onChange={(e) => setAlphaThreshold(Number(e.target.value))}
+          />
+          <span style={{ minWidth: 32, textAlign: "right" }}>
+            {alphaThreshold}
+          </span>
+        </label>
+      </div>
+
+      <BoundsPreview
+        image={image}
+        size={512}
+        showGuides={showGuides}
+        showCanvasFrame={showCanvasFrame}
+        showImageBounds={showImageBounds}
+        alphaThreshold={alphaThreshold}
+      />
     </div>
   );
 }

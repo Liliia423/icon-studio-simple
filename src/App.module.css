@@ -97,6 +97,7 @@ h2 {
   margin-top: 36px;
   flex-wrap: wrap;
   align-items: center;
+  cursor: pointer;
 }
 
 .controllabel {

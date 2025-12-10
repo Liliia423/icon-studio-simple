@@ -1,212 +1,25 @@
-/*import { useEffect, useMemo, useRef, useState } from "react";
-
-export type BoundsMode = "pre" | "post";
-
-export interface BoundsPreviewProps {
-  image: ImageBitmap | null;
-  size?: number;
-  showGuides?: boolean; // тільки центр-хрест
-  showCanvasFrame?: boolean; // червона рамка полотна
-  showImageBounds?: boolean; // фіолетова рамка PNG (alpha>threshold)
-  boundsMode?: BoundsMode;
-  alphaThreshold?: number; // 0..255
-  checkerA?: string;
-  checkerB?: string;
-}
-
-function drawChecker(
-  ctx: CanvasRenderingContext2D,
-  dim: number,
-  cell = 16,
-  a = "#fafafa",
-  b = "#efefef"
-) {
-  for (let y = 0; y < dim; y += cell) {
-    for (let x = 0; x < dim; x += cell) {
-      const even = ((x / cell) | 0) % 2 === ((y / cell) | 0) % 2;
-      ctx.fillStyle = even ? a : b;
-      ctx.fillRect(x, y, cell, cell);
-    }
-  }
-}
-
-function getAlphaBoundsFromImage(
-  image: ImageBitmap,
-  dim: number,
-  alphaThreshold: number
-) {
-  const tmp = document.createElement("canvas");
-  tmp.width = dim;
-  tmp.height = dim;
-  const tctx = tmp.getContext("2d")!;
-  tctx.clearRect(0, 0, dim, dim);
-  tctx.drawImage(image, 0, 0, dim, dim);
-
-  const { data, width, height } = tctx.getImageData(0, 0, dim, dim);
-  let minX = width,
-    minY = height,
-    maxX = -1,
-    maxY = -1;
-
-  for (let y = 0; y < height; y++) {
-    const row = y * width * 4;
-    for (let x = 0; x < width; x++) {
-      const a = data[row + x * 4 + 3];
-      if (a > alphaThreshold) {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-  if (maxX < 0 || maxY < 0) return null;
-  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
-}
-
-export default function BoundsPreview({
-  image,
-  size = 512,
-  showGuides = true,
-  showCanvasFrame = true,
-  showImageBounds = true,
-  boundsMode = "pre",
-  alphaThreshold = 1,
-  checkerA = "#fafafa",
-  checkerB = "#efefef",
-}: BoundsPreviewProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const dim = useMemo(() => Math.max(64, Math.round(size)), [size]);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const render = () => {
-      setErr(null);
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvas.width = Math.round(dim * dpr);
-      canvas.height = Math.round(dim * dpr);
-      canvas.style.width = `${dim}px`;
-      canvas.style.height = `${dim}px`;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      // фон
-      drawChecker(ctx, dim, 16, checkerA, checkerB);
-
-      // якщо картинки нема — лише фон і, за бажанням, рамка полотна
-      if (!image || cancelled) {
-        if (showCanvasFrame) {
-          ctx.strokeStyle = "#e53935";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(1, 1, dim - 2, dim - 2);
-        }
-        return;
-      }
-
-      // малюємо PNG 1:1
-      ctx.drawImage(image, 0, 0, dim, dim);
-
-      // guides: тільки центр-хрест
-      if (showGuides) {
-        ctx.save();
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = "#999";
-        ctx.beginPath();
-        ctx.moveTo(dim / 2, 0);
-        ctx.lineTo(dim / 2, dim);
-        ctx.moveTo(0, dim / 2);
-        ctx.lineTo(dim, dim / 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // рамка полотна
-      if (showCanvasFrame) {
-        ctx.strokeStyle = "#e53935";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(1, 1, dim - 2, dim - 2);
-      }
-
-      // рамка реального контенту PNG (alpha > threshold)
-      if (showImageBounds) {
-        const b =
-          boundsMode === "pre"
-            ? getAlphaBoundsFromImage(image, dim, alphaThreshold)
-            : getAlphaBoundsFromImage(image, dim, alphaThreshold);
-
-        if (b) {
-          ctx.save();
-          ctx.setLineDash([8, 4]);
-          ctx.lineWidth = 2.5;
-          ctx.strokeStyle = "#8e24aa";
-          ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-          ctx.restore();
-        }
-      }
-    };
-
-    render();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    image,
-    dim,
-    showGuides,
-    showCanvasFrame,
-    showImageBounds,
-    boundsMode,
-    alphaThreshold,
-    checkerA,
-    checkerB,
-  ]);
-
-  return (
-    <div style={{ display: "inline-flex", flexDirection: "column", gap: 8 }}>
-      <canvas
-        ref={canvasRef}
-        width={dim}
-        height={dim}
-        style={{
-          width: dim,
-          height: dim,
-          borderRadius: 12,
-          boxShadow: "0 6px 18px rgba(0,0,0,.08)",
-        }}
-      />
-      {err && <div style={{ color: "#b00020", fontSize: 14 }}>{err}</div>}
-    </div>
-  );
-}*/
-
-// src/components/BoundsPreview.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   computeDarkCentroidFromImageBitmap,
   computeDarkestRegionCentroidFromImageBitmap,
 } from "../lib/centroid";
-import type { DarkCentroid } from "../lib/centroid"; // ⬅ тип імпортуємо окремо
+import type { DarkCentroid } from "../lib/centroid";
+import type { DeepPoint } from "../lib/deepPoint";
 
 export interface BoundsPreviewProps {
   image: ImageBitmap | null;
   size?: number;
   alphaThreshold?: number;
 
-  showGuides?: boolean;
-  showCanvasFrame?: boolean;
-  showImageBounds?: boolean;
+  showGuides?: boolean; // сірі перехрестя по центру
+  showCanvasFrame?: boolean; // червона рамка полотна
+  showImageBounds?: boolean; // фіолетові bounds PNG
 
   checkerA?: string;
   checkerB?: string;
 
-  showDarkCentroid?: boolean; // обидва центри
+  showDarkCentroid?: boolean; // відображати обидва центри
+  deepPoint?: DeepPoint | null;
 }
 
 function drawChecker(
@@ -249,7 +62,6 @@ function getAlphaBoundsFromImage(
       const off = row + x * 4;
       const a = data[off + 3];
       if (a <= alphaThreshold) continue;
-
       if (x < minX) minX = x;
       if (y < minY) minY = y;
       if (x > maxX) maxX = x;
@@ -272,13 +84,16 @@ export default function BoundsPreview({
   checkerA = "#fafafa",
   checkerB = "#efefef",
   showDarkCentroid = true,
+  deepPoint = null, // ⬅ NEW
 }: BoundsPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dim = useMemo(() => Math.max(64, Math.round(size)), [size]);
 
   const [err, setErr] = useState<string | null>(null);
-  const [centroid, setCentroid] = useState<DarkCentroid>(null);
-  const [darkestCentroid, setDarkestCentroid] = useState<DarkCentroid>(null);
+  const [centroid, setCentroid] = useState<DarkCentroid | null>(null);
+  const [darkestCentroid, setDarkestCentroid] = useState<DarkCentroid | null>(
+    null
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -301,6 +116,7 @@ export default function BoundsPreview({
       // фон
       drawChecker(ctx, dim, 16, checkerA, checkerB);
 
+      // якщо зображення відсутнє — показуємо лише рамку (за потреби)
       if (!image || cancelled) {
         if (showCanvasFrame) {
           ctx.strokeStyle = "#e53935";
@@ -314,34 +130,31 @@ export default function BoundsPreview({
         return;
       }
 
-      // малюємо PNG
+      // малюємо PNG 1:1
       ctx.drawImage(image, 0, 0, dim, dim);
 
-      // вісі координат (0,0 у верхньому лівому куті)
+      // координатні вісі (0,0 у верхньому лівому)
       ctx.save();
       ctx.strokeStyle = "rgba(0,0,0,0.3)";
       ctx.lineWidth = 1;
       ctx.beginPath();
+      // осі
       ctx.moveTo(0, 0);
-      ctx.lineTo(dim - 6, 0); // вісь X
+      ctx.lineTo(dim - 6, 0);
       ctx.moveTo(0, 0);
-      ctx.lineTo(0, dim - 6); // вісь Y
+      ctx.lineTo(0, dim - 6);
       ctx.stroke();
-
       // стрілочки
       ctx.beginPath();
-      // стрілка X
       ctx.moveTo(dim - 6, 0);
       ctx.lineTo(dim - 12, -3);
       ctx.moveTo(dim - 6, 0);
       ctx.lineTo(dim - 12, 3);
-      // стрілка Y
       ctx.moveTo(0, dim - 6);
       ctx.lineTo(-3, dim - 12);
       ctx.moveTo(0, dim - 6);
       ctx.lineTo(3, dim - 12);
       ctx.stroke();
-
       ctx.font = "11px system-ui, sans-serif";
       ctx.fillStyle = "rgba(0,0,0,0.6)";
       ctx.fillText("0,0", 4, 11);
@@ -349,7 +162,7 @@ export default function BoundsPreview({
       ctx.fillText("y", 5, dim - 8);
       ctx.restore();
 
-      // guides (центр)
+      // центральні гіди
       if (showGuides) {
         ctx.save();
         ctx.setLineDash([4, 4]);
@@ -383,6 +196,7 @@ export default function BoundsPreview({
         }
       }
 
+      // центроїди
       if (showDarkCentroid) {
         const c1 = computeDarkCentroidFromImageBitmap(
           image,
@@ -400,7 +214,7 @@ export default function BoundsPreview({
           setDarkestCentroid(c2);
         }
 
-        // 1) глобальний темний центроїд (фіолетовий)
+        // 1) глобальний (фіолетовий)
         if (c1) {
           ctx.save();
           ctx.lineWidth = 2;
@@ -417,7 +231,7 @@ export default function BoundsPreview({
           ctx.restore();
         }
 
-        // 2) центроїд найтемнішої області (помаранчевий)
+        // 2) найтемніша область (помаранчева)
         if (c2) {
           ctx.save();
           ctx.lineWidth = 2;
@@ -431,6 +245,29 @@ export default function BoundsPreview({
           ctx.beginPath();
           ctx.arc(c2.x, c2.y, 3, 0, Math.PI * 2);
           ctx.stroke();
+          ctx.restore();
+        }
+        // 3) deepest-dark point (позначимо фіолетовою зірочкою)
+        if (deepPoint) {
+          const { x, y } = deepPoint;
+          ctx.save();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "#7c3aed"; // violet
+          ctx.fillStyle = "#7c3aed";
+
+          // маленька "зірочка" (ромб)
+          ctx.beginPath();
+          ctx.moveTo(x, y - 8);
+          ctx.lineTo(x + 6, y);
+          ctx.lineTo(x, y + 8);
+          ctx.lineTo(x - 6, y);
+          ctx.closePath();
+          ctx.stroke();
+
+          // крапка в центрі
+          ctx.beginPath();
+          ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
         }
       } else {
@@ -455,6 +292,7 @@ export default function BoundsPreview({
     checkerA,
     checkerB,
     showDarkCentroid,
+    deepPoint,
   ]);
 
   return (
@@ -472,7 +310,6 @@ export default function BoundsPreview({
       />
       {err && <div style={{ color: "#b00020", fontSize: 14 }}>{err}</div>}
 
-      {/* рядок з координатами */}
       {centroid && (
         <div style={{ color: "#334", fontSize: 13 }}>
           all-dark centroid:&nbsp; x={centroid.x_bl.toFixed(1)}px (

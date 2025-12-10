@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  computeDarkCentroidFromImageBitmap,
-  computeDarkestRegionCentroidFromImageBitmap,
-} from "../lib/centroid";
+import { computeDarkCentroidFromImageBitmap } from "../lib/centroid";
 import type { DarkCentroid } from "../lib/centroid";
 import type { DeepPoint } from "../lib/deepPoint";
 
@@ -18,7 +15,7 @@ export interface BoundsPreviewProps {
   checkerA?: string;
   checkerB?: string;
 
-  showDarkCentroid?: boolean; // відображати обидва центри
+  showDarkCentroid?: boolean; // показувати глобальний центроїд
   deepPoint?: DeepPoint | null;
 }
 
@@ -84,16 +81,13 @@ export default function BoundsPreview({
   checkerA = "#fafafa",
   checkerB = "#efefef",
   showDarkCentroid = true,
-  deepPoint = null, // ⬅ NEW
+  deepPoint = null,
 }: BoundsPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dim = useMemo(() => Math.max(64, Math.round(size)), [size]);
 
   const [err, setErr] = useState<string | null>(null);
   const [centroid, setCentroid] = useState<DarkCentroid | null>(null);
-  const [darkestCentroid, setDarkestCentroid] = useState<DarkCentroid | null>(
-    null
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -116,35 +110,30 @@ export default function BoundsPreview({
       // фон
       drawChecker(ctx, dim, 16, checkerA, checkerB);
 
-      // якщо зображення відсутнє — показуємо лише рамку (за потреби)
+      // якщо зображення відсутнє — лише рамка
       if (!image || cancelled) {
         if (showCanvasFrame) {
           ctx.strokeStyle = "#e53935";
           ctx.lineWidth = 2;
           ctx.strokeRect(1, 1, dim - 2, dim - 2);
         }
-        if (!cancelled) {
-          setCentroid(null);
-          setDarkestCentroid(null);
-        }
+        if (!cancelled) setCentroid(null);
         return;
       }
 
-      // малюємо PNG 1:1
+      // PNG 1:1
       ctx.drawImage(image, 0, 0, dim, dim);
 
-      // координатні вісі (0,0 у верхньому лівому)
+      // малі осі у куті
       ctx.save();
       ctx.strokeStyle = "rgba(0,0,0,0.3)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      // осі
       ctx.moveTo(0, 0);
       ctx.lineTo(dim - 6, 0);
       ctx.moveTo(0, 0);
       ctx.lineTo(0, dim - 6);
       ctx.stroke();
-      // стрілочки
       ctx.beginPath();
       ctx.moveTo(dim - 6, 0);
       ctx.lineTo(dim - 12, -3);
@@ -196,25 +185,15 @@ export default function BoundsPreview({
         }
       }
 
-      // центроїди
+      // глобальний центроїд
       if (showDarkCentroid) {
         const c1 = computeDarkCentroidFromImageBitmap(
           image,
           dim,
           alphaThreshold
         );
-        const c2 = computeDarkestRegionCentroidFromImageBitmap(
-          image,
-          dim,
-          alphaThreshold
-        );
+        if (!cancelled) setCentroid(c1);
 
-        if (!cancelled) {
-          setCentroid(c1);
-          setDarkestCentroid(c2);
-        }
-
-        // 1) глобальний (фіолетовий)
         if (c1) {
           ctx.save();
           ctx.lineWidth = 2;
@@ -230,51 +209,28 @@ export default function BoundsPreview({
           ctx.stroke();
           ctx.restore();
         }
-
-        // 2) найтемніша область (помаранчева)
-        if (c2) {
-          ctx.save();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = "#ef6c00";
-          ctx.beginPath();
-          ctx.moveTo(c2.x - 7, c2.y);
-          ctx.lineTo(c2.x + 7, c2.y);
-          ctx.moveTo(c2.x, c2.y - 7);
-          ctx.lineTo(c2.x, c2.y + 7);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(c2.x, c2.y, 3, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-        }
-        // 3) deepest-dark point (позначимо фіолетовою зірочкою)
-        if (deepPoint) {
-          const { x, y } = deepPoint;
-          ctx.save();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = "#7c3aed"; // violet
-          ctx.fillStyle = "#7c3aed";
-
-          // маленька "зірочка" (ромб)
-          ctx.beginPath();
-          ctx.moveTo(x, y - 8);
-          ctx.lineTo(x + 6, y);
-          ctx.lineTo(x, y + 8);
-          ctx.lineTo(x - 6, y);
-          ctx.closePath();
-          ctx.stroke();
-
-          // крапка в центрі
-          ctx.beginPath();
-          ctx.arc(x, y, 2.4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
       } else {
-        if (!cancelled) {
-          setCentroid(null);
-          setDarkestCentroid(null);
-        }
+        if (!cancelled) setCentroid(null);
+      }
+
+      // deepest-dark point (фіолетовий ромб + точка)
+      if (deepPoint) {
+        const { x, y } = deepPoint;
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#7c3aed";
+        ctx.fillStyle = "#7c3aed";
+        ctx.beginPath();
+        ctx.moveTo(x, y - 8);
+        ctx.lineTo(x + 6, y);
+        ctx.lineTo(x, y + 8);
+        ctx.lineTo(x - 6, y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
     };
 
@@ -315,14 +271,6 @@ export default function BoundsPreview({
           all-dark centroid:&nbsp; x={centroid.x_bl.toFixed(1)}px (
           {centroid.x_pct.toFixed(2)}%),&nbsp; y={centroid.y_bl.toFixed(1)}px (
           {centroid.y_pct.toFixed(2)}%)
-        </div>
-      )}
-      {darkestCentroid && (
-        <div style={{ color: "#663300", fontSize: 13 }}>
-          darkest-region centroid:&nbsp; x={darkestCentroid.x_bl.toFixed(1)}px (
-          {darkestCentroid.x_pct.toFixed(2)}%),&nbsp; y=
-          {darkestCentroid.y_bl.toFixed(1)}px (
-          {darkestCentroid.y_pct.toFixed(2)}%)
         </div>
       )}
     </div>

@@ -173,7 +173,7 @@ export default function App() {
   const [alphaThreshold, setAlphaThreshold] = useState<number>(1);
 
   const [showGuides, setShowGuides] = useState(true);
-  const [showCanvasFrame, setShowCanvasFrame] = useState(true);
+  //const [showCanvasFrame, setShowCanvasFrame] = useState(true);
   const [showImageBounds, setShowImageBounds] = useState(true);
 
   // NEW: результат deepest-point
@@ -204,11 +204,13 @@ export default function App() {
     }
   }, []);
 
-  const clearImage = () => {
+  {
+    /*const clearImage = () => {
     image?.close?.();
     setImage(null);
     setDeepPoint(null);
-  };
+  };*/
+  }
 
   // NEW: рахуємо deepest-dark point при зміні зображення/порогу
   useEffect(() => {
@@ -279,7 +281,7 @@ export default function App() {
           style={{ display: "none" }}
         />
 
-        <button
+        {/*<button
           onClick={clearImage}
           disabled={!image}
           style={{
@@ -292,7 +294,7 @@ export default function App() {
           }}
         >
           Clear
-        </button>
+        </button>*/}
 
         <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <input
@@ -303,14 +305,14 @@ export default function App() {
           Guides
         </label>
 
-        <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        {/*<label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <input
             type="checkbox"
             checked={showCanvasFrame}
             onChange={(e) => setShowCanvasFrame(e.target.checked)}
           />
           Canvas frame
-        </label>
+        </label>*/}
 
         <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <input
@@ -347,10 +349,12 @@ export default function App() {
         image={image}
         size={512}
         showGuides={showGuides}
-        showCanvasFrame={showCanvasFrame}
+        //showCanvasFrame={showCanvasFrame}
         showImageBounds={showImageBounds}
         alphaThreshold={alphaThreshold}
-        deepPoint={deepPoint} // ⬅ NEW
+        deepPoint={deepPoint} // NEW
+        showClipMask={true}
+        safeRatio={0.9} // заміна insetPct/cornerPct: частка радіуса
       />
 
       {/* NEW: показуємо результат deep-point під канвасом */}
